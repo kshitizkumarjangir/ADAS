@@ -3,7 +3,8 @@ import cv2
 import os
 import matplotlib.pyplot as plt
 
-
+nx = 9  # The number of inside corners in x
+ny = 6  # The number of inside corners in y
 def get_distortion_factors():
     # Prepare object points
     # From the provided calibration images, 9*6 corners are identified
@@ -99,6 +100,5 @@ def main():
 
 
 if __name__ == "__main__":
-    nx = 9  # The number of inside corners in x
-    ny = 6  # The number of inside corners in y
+
     main()

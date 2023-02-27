@@ -1,16 +1,18 @@
-import matplotlib
-
 import torch
 import cv2
 import numpy as np
 import time
 import colorsys
 import matplotlib
-
 # import deep sort libraries
 from deep_sort_realtime.deepsort_tracker import DeepSort
-import neighbour_veh_data as nvd
 
+# import project files
+import neighbour_veh_data as nvd
+import track_Finder as tf
+import lane_finder as lf
+
+font = cv2.FONT_HERSHEY_COMPLEX_SMALL
 
 def get_closest_color_and_status(bgr):
     colors = ((0, 0, 255),  # red color
@@ -25,7 +27,7 @@ def get_closest_color_and_status(bgr):
     closest_color = min(euclidian_dist)[1]
 
     h, s, v = colorsys.rgb_to_hsv(bgr[2] / 255, bgr[1] / 255, bgr[0] / 255)
-    print("closest color: ", closest_color, " h: ", h, " v:", v)
+    # print("closest color: ", closest_color, " h: ", h, " v:", v)
 
     status = ''
     if closest_color == colors[0]:
@@ -95,15 +97,151 @@ def is_pt_on_track(pts):
 
     path = matplotlib.path.Path(poly)
 
-    if pts[1] > 700:
-        test = 11
-
     is_inside = path.contains_point(pts)
 
     return is_inside
 
 
-def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
+def click_button(event, x, y, flags, params):
+    global ploy_annotation
+    global show_annotation
+
+    global ploy_trackObjects
+    global is_tracking
+
+    global ploy_trackTrafficSignal
+    global detect_traffic_light_status
+
+    global ploy_calSpeedDist
+    global detect_speed_distance
+
+    global ploy_predictMovement
+    global predict_movement
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        is_inside = cv2.pointPolygonTest(ploy_annotation, (x, y), False)
+        if is_inside > 0:
+            if show_annotation:
+                show_annotation = False
+            else:
+                show_annotation = True
+            return
+
+        is_inside = cv2.pointPolygonTest(ploy_trackObjects, (x, y), False)
+        if is_inside > 0:
+            if is_tracking:
+                is_tracking = False
+            else:
+                is_tracking = True
+            return
+
+        is_inside = cv2.pointPolygonTest(ploy_trackTrafficSignal, (x, y), False)
+        if is_inside > 0:
+            if detect_traffic_light_status:
+                detect_traffic_light_status = False
+            else:
+                detect_traffic_light_status = True
+            return
+
+        is_inside = cv2.pointPolygonTest(ploy_calSpeedDist, (x, y), False)
+        if is_inside > 0:
+            if detect_speed_distance:
+                detect_speed_distance = False
+            else:
+                detect_speed_distance = True
+            return
+
+        is_inside = cv2.pointPolygonTest(ploy_predictMovement, (x, y), False)
+        if is_inside > 0:
+            if predict_movement:
+                predict_movement = False
+            else:
+                predict_movement = True
+            return
+
+
+def addButtons(frame):
+    global ploy_annotation
+    global show_annotation
+
+    global ploy_trackObjects
+    global is_tracking
+
+    global ploy_trackTrafficSignal
+    global detect_traffic_light_status
+
+    global ploy_calSpeedDist
+    global detect_speed_distance
+
+    global ploy_predictMovement
+    global predict_movement
+
+    # Show Annotation
+    button_color = (52, 174, 235)
+    y = 100
+
+    w, h = cv2.getTextSize("Show Annotation", font, 1, 2)
+    h = h + w[1]
+    ploy_annotation = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
+    if show_annotation:
+        cv2.fillPoly(frame, ploy_annotation, button_color)
+    else:
+        cv2.rectangle(frame, (10, y), (10 + w[0], y + h), button_color, 2)
+
+    cv2.putText(frame, "Show Annotation", (10, y + h - 2), font, 1, (255, 255, 255), 1)
+    y = y + h + 10
+
+    # Track Objects
+    w, h = cv2.getTextSize("Track Objects", font, 1, 2)
+    h = w[1] + h
+    ploy_trackObjects = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
+    if is_tracking:
+        cv2.fillPoly(frame, ploy_trackObjects, button_color)
+    else:
+        cv2.rectangle(frame, (10, y), (10 + w[0], y + h), button_color, 2)
+
+    cv2.putText(frame, "Track Objects", (10, y + h - 2), font, 1, (255, 255, 255), 1)
+    y = y + h + 10
+
+    # Track Traffic Signal
+    w, h = cv2.getTextSize("Traffic Signal", font, 1, 2)
+    h = w[1] + h
+    ploy_trackTrafficSignal = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
+    if detect_traffic_light_status:
+        cv2.fillPoly(frame, ploy_trackTrafficSignal, button_color)
+    else:
+        cv2.rectangle(frame, (10, y), (10 + w[0], y + h), button_color, 2)
+
+    cv2.putText(frame, "Traffic Signal", (10, y + h - 2), font, 1, (255, 255, 255), 1)
+    y = y + h + 10
+
+    # Calculate Speed and Distance
+    w, h = cv2.getTextSize("Speed and Distance", font, 1, 2)
+    h = w[1] + h
+    ploy_calSpeedDist = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
+    if detect_speed_distance:
+        cv2.fillPoly(frame, ploy_calSpeedDist, button_color)
+    else:
+        cv2.rectangle(frame, (10, y), (10 + w[0], y + h), button_color, 2)
+
+    cv2.putText(frame, "Speed and Distance", (10, y + h - 2), font, 1, (255, 255, 255), 1)
+    y = y + h + 10
+
+    # Predict Movement
+    w, h = cv2.getTextSize("Predict Movement", font, 1, 2)
+    h = w[1] + h
+    ploy_predictMovement = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
+    if predict_movement:
+        cv2.fillPoly(frame, ploy_predictMovement, button_color)
+    else:
+        cv2.rectangle(frame, (10, y), (10 + w[0], y + h), button_color, 2)
+
+    cv2.putText(frame, "Predict Movement", (10, y + h - 2), font, 1, (255, 255, 255), 1)
+    y = y + h + 10
+
+
+
+def detectObject(video_feed):
     # Generate random color
     rand_color = list(np.random.choice(range(255), size=(80, 3), replace=False))
 
@@ -131,9 +269,14 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
                               polygon=False,
                               today=None)
 
-    pre_bbox = {}
-    fps = 0
+    veh_speed_dist_data = {}
+    fps = 1
     veh_dir_data = {}
+
+    # Params for lane detection
+    if detect_lane:
+        init = True
+        mtx, dist = tf.get_distortion_factors()
 
     while True:
         _, img = cap.read()
@@ -142,6 +285,9 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
 
         t1 = time.time()
         # img = cv2.resize(img, (640, 480))
+
+        # Add UI Buttons
+        addButtons(img)
 
         # Detect frame image - Yolo
         result = model(img)
@@ -190,32 +336,34 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
                 identifier = class_name + " ID: " + str(track_id)
 
                 # Add marker and class name + track ID
-                cv2.rectangle(img, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), obj_color, 2)
-                # cv2.putText(img, identifier, (int(bbox[0]), int(bbox[1] - 10)),
-                #            cv2.FONT_HERSHEY_PLAIN, 1, obj_color, 2)
+                cv2.rectangle(img, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), obj_color, 1)
+                if show_annotation:
+                    cv2.putText(img, identifier, (int(bbox[0]), int(bbox[1] - 10)),
+                                font, 0.9, obj_color, 2)
 
                 # add vehicle live data
                 if fps != 0 and class_name in ['car', 'truck', 'bus', 'bicycle', 'motorcycle']:
 
                     if detect_speed_distance:
                         # Add relative speed and distance
-                        if identifier in pre_bbox.keys():
-                            speed = nvd.get_vehicle_relative_speed(pre_bbox[identifier], bbox, 1 / fps)
-                            rel_distance = nvd.get_veh_rel_dist(bbox)
-
+                        if identifier in veh_speed_dist_data.keys():
+                            speed, rel_distance = nvd.get_vehicle_relative_speed(veh_speed_dist_data[identifier][0],
+                                                                                 bbox, 1 / fps)
+                            #  t: time.time() - veh_speed_dist_data[identifier][1]
                             # print(identifier + ' speed: ', speed)
                             # print(identifier + ' dist: ', rel_distance)
 
-                            if speed != 999: # check for in-scope
-                                cv2.putText(img, "speed: " + str(speed), (int(bbox[0]), int(bbox[1] + 10)),
-                                            cv2.FONT_HERSHEY_PLAIN, 2, obj_color, 2)
-                                cv2.putText(img, "distance: " + str(rel_distance), (int(bbox[0]), int(bbox[1] + 25)),
-                                            cv2.FONT_HERSHEY_PLAIN, 2, obj_color, 2)
-                        else:
-                            pre_bbox[identifier] = bbox
+                            if speed != 999:  # check for in-scope
+                                cv2.putText(img, "speed: " + str(speed) + "km/h", (int(bbox[0]), int(bbox[1] + 20)),
+                                            font, 0.9, obj_color, 1)
+                                cv2.putText(img, "distance: " + str(rel_distance) + "m",
+                                            (int(bbox[0]), int(bbox[1] + 40)),
+                                            font, 0.9, obj_color, 1)
+
+                        veh_speed_dist_data[identifier] = [bbox, time.time()]
 
                     # Add predicted vehicle direction
-                    if predict_direction:
+                    if predict_movement:
                         # check side (LHS/RHS) of veh
                         if abs(bbox[0] - veh_center_line_width) < abs(bbox[2] - veh_center_line_width):
                             veh_pt = (int(bbox[0]), int(bbox[3]))
@@ -226,7 +374,7 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
                             if veh_dir_data[identifier][0] >= update_veh_move_status_after_frame:
                                 # Check veh position, if in front of my car
                                 on_track = is_pt_on_track(veh_pt)
-                                cv2.circle(img, veh_pt, 4, (255, 0, 0), -1)
+                                # cv2.circle(img, veh_pt, 4, (255, 0, 0), -1)
 
                                 warning_pt = (int((bbox[0] + bbox[2]) / 2 - 5), int(bbox[1] - 15))
 
@@ -274,12 +422,13 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
                 obj_color1 = tuple(np.ndarray.tolist(obj_color1))
 
                 # Add marker and class name + track ID
-                cv2.rectangle(img, (int(bbox1[0]), int(bbox1[1])), (int(bbox1[2]), int(bbox1[3])), obj_color1, 2)
-                cv2.putText(img, class_name1 + " - " + str(confidence1), (int(bbox1[0]), int(bbox1[1] - 10)),
-                            cv2.FONT_HERSHEY_PLAIN, 1, obj_color1, 2)
+                cv2.rectangle(img, (int(bbox1[0]), int(bbox1[1])), (int(bbox1[2]), int(bbox1[3])), obj_color1, 1)
+                if show_annotation:
+                    cv2.putText(img, class_name1 + " - " + str(confidence1), (int(bbox1[0]), int(bbox1[1] - 10)),
+                                font, 0.9, obj_color1, 2)
 
         # In case of multiple traffic light, focus only on switched on light
-        if is_traffic_light_present:
+        if detect_traffic_light_status and is_traffic_light_present:
             brightest_color = max(traffic_vh)
 
             signal_status = 'STOP'
@@ -296,20 +445,31 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
                     signal_status = 'GO'
                     textcolor = (0, 255, 0)
 
-                print("selected color: ", brightest_color)
+                # print("selected color: ", brightest_color)
                 cv2.putText(img, "Traffic Signal: " + signal_status, org=(0, 60),
-                            fontFace=cv2.FONT_HERSHEY_COMPLEX_SMALL, fontScale=0.9,
+                            fontFace=font, fontScale=1.5,
                             color=textcolor, thickness=2)
-            else:
-                print("Current Traffic light: ", brightest_color)
 
         # Fetch FPS
         fps = 1. / (time.time() - t1)
-        cv2.putText(img, "FPS: {:.0f}".format(fps), org=(0, 30), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=3,
+        cv2.putText(img, "FPS: {:.0f}".format(fps), org=(0, 30), fontFace=font, fontScale=2,
                     color=(255, 255, 0), thickness=2)
 
-        # img = cv2.resize(img, (1080, 720))
-        cv2.imshow("live_video", img)
+        # detect lane
+        if detect_lane:
+            img_out, angle, colorwarp, draw_poly_img = lf.lane_finding_pipeline(img, init, mtx, dist)
+
+            if angle > 1.5 or angle < -1.5:
+                init = True
+            else:
+                init = False
+
+            img_out = cv2.resize(img_out, (1080, 720))
+            cv2.imshow(root_window, img_out)
+
+        else:
+            # img = cv2.resize(img, (1080, 720))
+            cv2.imshow(root_window, img)
 
         c = cv2.waitKey(1)
         if c == 27:  # Stop when Esc is pressed
@@ -320,13 +480,25 @@ def detectObject(video_feed, object_type_to_tracked, min_confidence=0.49):
 
 
 if __name__ == "__main__":
-    # ------ Control parameters
+    # ----------------------------------Control Params-----------------------------------------------------------
+    root_window = 'microADAS'
+    show_annotation = False
+    ploy_annotation = np.zeros(shape=(4, 2))
+    ploy_trackObjects = np.zeros(shape=(4, 2))
+    ploy_trackTrafficSignal = np.zeros(shape=(4, 2))
+    ploy_calSpeedDist = np.zeros(shape=(4, 2))
+    ploy_predictMovement = np.zeros(shape=(4, 2))
 
     # track objects
-    is_tracking = True
+    is_tracking = False
+    object_type_to_tracked = ['car', 'truck', 'bus', 'bicycle', 'person', 'motorcycle', 'traffic light']
+    min_confidence = 0.49
+
+    # detect lane
+    detect_lane = False
 
     # detect traffic lights status
-    detect_traffic_light_status = True
+    detect_traffic_light_status = False
     min_traffic_light_brightness = 0.7
     squeez_traffic_light_factor = 0.5  # to reduce extra area/cover around the light
     gaussian_blur_rad = 3
@@ -335,13 +507,16 @@ if __name__ == "__main__":
     detect_speed_distance = False
 
     # predict direction of movement
-    predict_direction = True
+    predict_movement = False
     update_veh_move_status_after_frame = 10
     veh_center_line_width = int((460 + 1768) / 2)
 
+    # --------------------------------------------------------------------------------------------------------
+
+    cv2.namedWindow(root_window)
+    cv2.setMouseCallback(root_window, click_button)
+
     videoPath = 'testdata/video/highway/'
-    videoFile = 'IMG_1828.MOV'
-    object_type_to_tracked_1 = ['car', 'truck', 'bus', 'bicycle', 'person', 'motorcycle', 'traffic light']
-    min_confidence_1 = 0.49
-    detectObject(videoPath + videoFile, object_type_to_tracked_1, min_confidence_1)
-    # detectObject(0, object_type_to_tracked_1, min_confidence_1)
+    videoFile = 'IMG_1831.MOV'
+
+    detectObject(videoPath + videoFile)
