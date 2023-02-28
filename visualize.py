@@ -181,7 +181,7 @@ def addButtons(frame):
     y = 100
 
     w, h = cv2.getTextSize("Show Annotation", font, 1, 2)
-    h = h + w[1]
+    h = h + w[1] + 4
     ploy_annotation = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
     if show_annotation:
         cv2.fillPoly(frame, ploy_annotation, button_color)
@@ -193,7 +193,7 @@ def addButtons(frame):
 
     # Track Objects
     w, h = cv2.getTextSize("Track Objects", font, 1, 2)
-    h = w[1] + h
+    h = w[1] + h + 4
     ploy_trackObjects = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
     if is_tracking:
         cv2.fillPoly(frame, ploy_trackObjects, button_color)
@@ -205,7 +205,7 @@ def addButtons(frame):
 
     # Track Traffic Signal
     w, h = cv2.getTextSize("Traffic Signal", font, 1, 2)
-    h = w[1] + h
+    h = w[1] + h + 4
     ploy_trackTrafficSignal = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
     if detect_traffic_light_status:
         cv2.fillPoly(frame, ploy_trackTrafficSignal, button_color)
@@ -217,7 +217,7 @@ def addButtons(frame):
 
     # Calculate Speed and Distance
     w, h = cv2.getTextSize("Speed and Distance", font, 1, 2)
-    h = w[1] + h
+    h = w[1] + h + 4
     ploy_calSpeedDist = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
     if detect_speed_distance:
         cv2.fillPoly(frame, ploy_calSpeedDist, button_color)
@@ -229,7 +229,7 @@ def addButtons(frame):
 
     # Predict Movement
     w, h = cv2.getTextSize("Predict Movement", font, 1, 2)
-    h = w[1] + h
+    h = w[1] + h + 4
     ploy_predictMovement = np.array([[(10, y), (10 + w[0], y), (10 + w[0], y + h), (10, y + h)]])
     if predict_movement:
         cv2.fillPoly(frame, ploy_predictMovement, button_color)
@@ -468,7 +468,7 @@ def detectObject(video_feed):
             cv2.imshow(root_window, img_out)
 
         else:
-            # img = cv2.resize(img, (1080, 720))
+            # img = cv2.resize(img, (1920, 1020))
             cv2.imshow(root_window, img)
 
         c = cv2.waitKey(1)
@@ -482,7 +482,7 @@ def detectObject(video_feed):
 if __name__ == "__main__":
     # ----------------------------------Control Params-----------------------------------------------------------
     root_window = 'microADAS'
-    show_annotation = False
+    show_annotation = True
     ploy_annotation = np.zeros(shape=(4, 2))
     ploy_trackObjects = np.zeros(shape=(4, 2))
     ploy_trackTrafficSignal = np.zeros(shape=(4, 2))
@@ -511,12 +511,20 @@ if __name__ == "__main__":
     update_veh_move_status_after_frame = 10
     veh_center_line_width = int((460 + 1768) / 2)
 
+
     # --------------------------------------------------------------------------------------------------------
 
     cv2.namedWindow(root_window)
     cv2.setMouseCallback(root_window, click_button)
 
-    videoPath = 'testdata/video/highway/'
-    videoFile = 'IMG_1831.MOV'
+    videoPath = 'testdata/video/highway/Selected/'
+    videoFile = 'master.mp4'
 
     detectObject(videoPath + videoFile)
+
+
+
+
+
+
+
